@@ -376,7 +376,7 @@ function solveChallenge(ev) {
   ev.preventDefault();
   ev.stopImmediatePropagation();
 
-  if (!ev.isTrusted || solverWorking) {
+  if (/*!ev.isTrusted ||*/ solverWorking) {
     return;
   }
   setSolverState({working: true});
