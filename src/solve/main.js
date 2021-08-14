@@ -51,7 +51,7 @@ function syncUI() {
     helpButton.remove();
 
     const helpButtonHolder = document.querySelector('.help-button-holder');
-    const shadow = helpButtonHolder.attachShadow({mode: 'closed'});
+    const shadow = helpButtonHolder/*.attachShadow({mode: 'closed'})*/;
 
     const link = document.createElement('link');
     link.setAttribute('rel', 'stylesheet');
