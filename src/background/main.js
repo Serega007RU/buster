@@ -513,7 +513,7 @@ async function transcribeAudio(audioUrl, lang) {
   }
 
   if (!solution) {
-    showNotification({messageId: 'error_captchaNotSolved', timeout: 6000});
+    // showNotification({messageId: 'error_captchaNotSolved', timeout: 6000});
   } else {
     return solution;
   }
