@@ -529,12 +529,12 @@ async function onMessage(request, sender) {
       timeout: request.timeout
     });
   } else if (request.id === 'captchaSolved') {
-    let {useCount} = await storage.get('useCount', 'sync');
-    useCount += 1;
-    await storage.set({useCount}, 'sync');
-    if ([30, 100].includes(useCount)) {
-      await showContributePage('use');
-    }
+    // let {useCount} = await storage.get('useCount', 'sync');
+    // useCount += 1;
+    // await storage.set({useCount}, 'sync');
+    // if ([30, 100].includes(useCount)) {
+    //   await showContributePage('use');
+    // }
   } else if (request.id === 'transcribeAudio') {
     addBackgroundRequestLitener();
     try {
