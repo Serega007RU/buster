@@ -223,8 +223,8 @@ async function prepareAudio(audio) {
 
   const audioSlice = await sliceAudio({
     audioBuffer,
-    start: 1.5,
-    end: audioBuffer.duration - 1.5
+    start: 1.0,
+    end: audioBuffer.duration - 1.0
   });
 
   return audioBufferToWav(audioSlice);
