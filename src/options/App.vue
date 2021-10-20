@@ -25,6 +25,16 @@
           </v-textfield>
         </div>
 
+        <a
+          class="service-guide"
+          v-if="options.speechService === 'googleSpeechApi'"
+          target="_blank"
+          rel="noreferrer"
+          href="https://github.com/dessant/buster/wiki/Configuring-Google-Cloud-Speech-to-Text"
+        >
+          {{ getText('linkText_apiGuide') }}
+        </a>
+
         <div
           class="option select"
           v-if="options.speechService === 'ibmSpeechApi'"
@@ -47,6 +57,16 @@
           </v-textfield>
         </div>
 
+        <a
+          class="service-guide"
+          v-if="options.speechService === 'ibmSpeechApi'"
+          target="_blank"
+          rel="noreferrer"
+          href="https://github.com/dessant/buster/wiki/Configuring-IBM-Watson-Speech-to-Text"
+        >
+          {{ getText('linkText_apiGuide') }}
+        </a>
+
         <div
           class="option select"
           v-if="options.speechService === 'microsoftSpeechApi'"
@@ -68,6 +88,16 @@
           >
           </v-textfield>
         </div>
+
+        <a
+          class="service-guide"
+          v-if="options.speechService === 'microsoftSpeechApi'"
+          target="_blank"
+          rel="noreferrer"
+          href="https://github.com/dessant/buster/wiki/Configuring-Microsoft-Azure-Speech-to-Text"
+        >
+          {{ getText('linkText_apiGuide') }}
+        </a>
 
         <v-textfield
           v-if="options.speechService === 'witSpeechApi'"
@@ -108,7 +138,7 @@
           rel="noreferrer"
           href="https://github.com/dessant/buster/wiki/Configuring-Wit.ai"
         >
-          {{ getText('linkText_witSpeechApiGuide') }}
+          {{ getText('linkText_apiGuide') }}
         </a>
       </div>
     </div>
@@ -263,6 +293,7 @@ export default {
           'microsoftSpeechApi'
         ],
         ibmSpeechApiLoc: [
+          'seoul',
           'london',
           'frankfurt',
           'dallas',
@@ -277,9 +308,13 @@ export default {
           'centralFr',
           'centralIn',
           'eastJp',
+          'westJp',
+          'southBr',
           'centralKr',
+          'northCh',
           'northCentralUs',
           'southCentralUs',
+          'westCentralUs',
           'southUk',
           'eastUs',
           'eastUs2',

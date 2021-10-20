@@ -20,33 +20,38 @@
   },
 
   "optionValue_speechService_googleSpeechApi": {
-    "message": "Google Cloud Speech API",
+    "message": "Google Cloud Speech-to-Text",
     "description": "Value of the option."
   },
 
   "optionValue_speechService_ibmSpeechApi": {
-    "message": "IBM Watson Speech to Text API",
+    "message": "IBM Watson Speech to Text",
     "description": "Value of the option."
   },
 
   "optionValue_speechService_microsoftSpeechApi": {
-    "message": "Microsoft Azure Speech to Text API",
+    "message": "Microsoft Azure Speech to Text",
     "description": "Value of the option."
   },
 
   "optionValue_speechService_witSpeechApiDemo": {
-    "message": "Wit Speech API (managed)",
+    "message": "Wit.ai (managed)",
     "description": "Value of the option."
   },
 
   "optionValue_speechService_witSpeechApi": {
-    "message": "Wit Speech API",
+    "message": "Wit.ai",
     "description": "Value of the option."
   },
 
   "optionTitle_ibmSpeechApiLoc": {
     "message": "API location",
     "description": "Title of the option."
+  },
+
+  "optionValue_ibmSpeechApiLoc_seoul": {
+    "message": "Seoul",
+    "description": "Value of the option."
   },
 
   "optionValue_ibmSpeechApiLoc_london": {
@@ -105,7 +110,7 @@
   },
 
   "optionValue_microsoftSpeechApiLoc_centralIn": {
-    "message": "India Central",
+    "message": "Central India",
     "description": "Value of the option."
   },
 
@@ -114,8 +119,23 @@
     "description": "Value of the option."
   },
 
+  "optionValue_microsoftSpeechApiLoc_westJp": {
+    "message": "Japan West",
+    "description": "Value of the option."
+  },
+
+  "optionValue_microsoftSpeechApiLoc_southBr": {
+    "message": "Brazil South",
+    "description": "Value of the option."
+  },
+
   "optionValue_microsoftSpeechApiLoc_centralKr": {
     "message": "Korea Central",
+    "description": "Value of the option."
+  },
+
+  "optionValue_microsoftSpeechApiLoc_northCh": {
+    "message": "Switzerland North",
     "description": "Value of the option."
   },
 
@@ -126,6 +146,11 @@
 
   "optionValue_microsoftSpeechApiLoc_southCentralUs": {
     "message": "South Central US",
+    "description": "Value of the option."
+  },
+
+  "optionValue_microsoftSpeechApiLoc_westCentralUs": {
+    "message": "West Central US",
     "description": "Value of the option."
   },
 
@@ -430,7 +455,7 @@
     "description": "Text of the link."
   },
 
-  "linkText_witSpeechApiGuide": {
+  "linkText_apiGuide": {
     "message": "How to get an API key?",
     "description": "Text of the link."
   },
