@@ -61,10 +61,7 @@ function syncUI() {
       ? 0
       : 2;
 
-    const shadow = helpButtonHolder.attachShadow({
-      mode: 'closed',
-      delegatesFocus: true
-    });
+    const shadow = helpButtonHolder;
 
     const link = document.createElement('link');
     link.setAttribute('rel', 'stylesheet');
