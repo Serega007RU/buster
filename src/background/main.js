@@ -512,11 +512,7 @@ async function transcribeAudio(audioUrl, lang) {
     }
   }
 
-  if (!solution) {
-    showNotification({messageId: 'error_captchaNotSolved', timeout: 6000});
-  } else {
-    return solution;
-  }
+  if (solution) return solution
 }
 
 async function onMessage(request, sender) {
