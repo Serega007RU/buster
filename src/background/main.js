@@ -1,21 +1,20 @@
-import browser from 'webextension-polyfill';
 import audioBufferToWav from 'audiobuffer-to-wav';
 import aes from 'crypto-js/aes';
 import sha256 from 'crypto-js/sha256';
 import utf8 from 'crypto-js/enc-utf8';
 
-import {initStorage} from 'storage/init';
+import {initStorage, migrateLegacyStorage} from 'storage/init';
+import {isStorageReady} from 'storage/storage';
 import storage from 'storage/storage';
 import {
   showNotification,
-  showContributePage,
-  sendNativeMessage
+  sendNativeMessage,
+  processMessageResponse,
+  processAppUse
 } from 'utils/app';
 import {
   executeCode,
-  executeFile,
   scriptsAllowed,
-  functionInContext,
   getBrowser,
   getPlatform,
   getRandomInt,
@@ -28,9 +27,7 @@ import {
   captchaGoogleSpeechApiLangCodes,
   captchaIbmSpeechApiLangCodes,
   captchaMicrosoftSpeechApiLangCodes,
-  captchaWitSpeechApiLangCodes,
-  ibmSpeechApiUrls,
-  microsoftSpeechApiUrls
+  captchaWitSpeechApiLangCodes
 } from 'utils/data';
 import {targetEnv, clientAppVersion} from 'utils/config';
 
@@ -89,23 +86,46 @@ async function getFramePos(tabId, frameId, frameIndex) {
   return {x, y};
 }
 
+function initResetCaptcha() {
+  const initReset = function (challengeUrl) {
+    const script = document.createElement('script');
+    script.onload = function (ev) {
+      ev.target.remove();
+      document.dispatchEvent(
+        new CustomEvent('___resetCaptcha', {detail: challengeUrl})
+      );
+    };
+    script.src = chrome.runtime.getURL('/src/scripts/reset.js');
+    document.documentElement.appendChild(script);
+  };
+
+  const onMessage = function (request) {
+    if (request.id === 'resetCaptcha') {
+      removeCallbacks();
+      initReset(request.challengeUrl);
+    }
+  };
+
+  const removeCallbacks = function () {
+    window.clearTimeout(timeoutId);
+    chrome.runtime.onMessage.removeListener(onMessage);
+  };
+
+  const timeoutId = window.setTimeout(removeCallbacks, 10000); // 10 seconds
+
+  chrome.runtime.onMessage.addListener(onMessage);
+}
+
 async function resetCaptcha(tabId, frameId, challengeUrl) {
-  frameId = (
-    await browser.webNavigation.getFrame({
-      tabId,
-      frameId: frameId
-    })
-  ).parentFrameId;
+  frameId = (await browser.webNavigation.getFrame({tabId, frameId}))
+    .parentFrameId;
 
   if (!(await scriptsAllowed(tabId, frameId))) {
     await showNotification({messageId: 'error_scriptsNotAllowed'});
     return;
   }
 
-  if (!(await functionInContext('addListener', tabId, frameId))) {
-    await executeFile('/src/content/initReset.js', tabId, frameId);
-  }
-  await executeCode('addListener()', tabId, frameId);
+  await executeCode(`(${initResetCaptcha.toString()})()`, tabId, frameId);
 
   await browser.tabs.sendMessage(
     tabId,
@@ -126,10 +146,10 @@ function challengeRequestCallback(details) {
 }
 
 async function setChallengeLocale() {
-  const {loadEnglishChallenge, simulateUserInput} = await storage.get(
-    ['loadEnglishChallenge', 'simulateUserInput'],
-    'sync'
-  );
+  const {loadEnglishChallenge, simulateUserInput} = await storage.get([
+    'loadEnglishChallenge',
+    'simulateUserInput'
+  ]);
 
   if (loadEnglishChallenge || simulateUserInput) {
     if (
@@ -139,18 +159,22 @@ async function setChallengeLocale() {
         challengeRequestCallback,
         {
           urls: [
+            'https://google.com/recaptcha/api2/anchor*',
+            'https://google.com/recaptcha/api2/bframe*',
             'https://www.google.com/recaptcha/api2/anchor*',
             'https://www.google.com/recaptcha/api2/bframe*',
-            'https://www.recaptcha.net/recaptcha/api2/anchor*',
-            'https://www.recaptcha.net/recaptcha/api2/bframe*',
-            'https://recaptcha.net/recaptcha/api2/anchor*',
-            'https://recaptcha.net/recaptcha/api2/bframe*',
+            'https://google.com/recaptcha/enterprise/anchor*',
+            'https://google.com/recaptcha/enterprise/bframe*',
             'https://www.google.com/recaptcha/enterprise/anchor*',
             'https://www.google.com/recaptcha/enterprise/bframe*',
-            'https://www.recaptcha.net/recaptcha/enterprise/anchor*',
-            'https://www.recaptcha.net/recaptcha/enterprise/bframe*',
+            'https://recaptcha.net/recaptcha/api2/anchor*',
+            'https://recaptcha.net/recaptcha/api2/bframe*',
+            'https://www.recaptcha.net/recaptcha/api2/anchor*',
+            'https://www.recaptcha.net/recaptcha/api2/bframe*',
             'https://recaptcha.net/recaptcha/enterprise/anchor*',
-            'https://recaptcha.net/recaptcha/enterprise/bframe*'
+            'https://recaptcha.net/recaptcha/enterprise/bframe*',
+            'https://www.recaptcha.net/recaptcha/enterprise/anchor*',
+            'https://www.recaptcha.net/recaptcha/enterprise/bframe*'
           ],
           types: ['sub_frame']
         },
@@ -182,9 +206,10 @@ function addBackgroundRequestListener() {
     !browser.webRequest.onBeforeSendHeaders.hasListener(removeRequestOrigin)
   ) {
     const urls = [
+      'https://google.com/*',
       'https://www.google.com/*',
-      'https://www.recaptcha.net/*',
       'https://recaptcha.net/*',
+      'https://www.recaptcha.net/*',
       'https://api.wit.ai/*',
       'https://speech.googleapis.com/*',
       'https://*.speech-to-text.watson.cloud.ibm.com/*',
@@ -242,9 +267,9 @@ async function loadSecrets() {
     secrets = JSON.parse(aes.decrypt(ciphertext, key).toString(utf8));
   } catch (err) {
     secrets = {};
-    const {speechService} = await storage.get('speechService', 'sync');
+    const {speechService} = await storage.get('speechService');
     if (speechService === 'witSpeechApiDemo') {
-      await storage.set({speechService: 'witSpeechApi'}, 'sync');
+      await storage.set({speechService: 'witSpeechApi'});
     }
   }
 }
@@ -263,10 +288,7 @@ async function getWitSpeechApiKey(speechService, language) {
       return apiKey;
     }
   } else {
-    const {witSpeechApiKeys: apiKeys} = await storage.get(
-      'witSpeechApiKeys',
-      'sync'
-    );
+    const {witSpeechApiKeys: apiKeys} = await storage.get('witSpeechApiKeys');
     return apiKeys[language];
   }
 }
@@ -274,8 +296,7 @@ async function getWitSpeechApiKey(speechService, language) {
 async function getWitSpeechApiResult(apiKey, audioContent) {
   const result = {};
 
-  const rsp = await fetch('https://api.wit.ai/speech?v=20200513', {
-    referrer: '',
+  const rsp = await fetch('https://api.wit.ai/speech?v=20221114', {
     mode: 'cors',
     method: 'POST',
     headers: {
@@ -292,7 +313,7 @@ async function getWitSpeechApiResult(apiKey, audioContent) {
       throw new Error(`API response: ${rsp.status}, ${await rsp.text()}`);
     }
   } else {
-    const data = (await rsp.json()).text;
+    const data = JSON.parse((await rsp.text()).split('\r\n').at(-1)).text;
     if (data) {
       result.text = data.trim();
     }
@@ -301,15 +322,56 @@ async function getWitSpeechApiResult(apiKey, audioContent) {
   return result;
 }
 
-async function getIbmSpeechApiResult(apiUrl, apiKey, audioContent, language) {
+async function getGoogleSpeechApiResult(
+  apiKey,
+  audioContent,
+  language,
+  detectAltLanguages
+) {
+  const data = {
+    audio: {
+      content: arrayBufferToBase64(audioContent)
+    },
+    config: {
+      encoding: 'LINEAR16',
+      languageCode: language,
+      model: 'video',
+      sampleRateHertz: 16000
+    }
+  };
+
+  if (!['en-US', 'en-GB'].includes(language) && detectAltLanguages) {
+    data.config.model = 'default';
+    data.config.alternativeLanguageCodes = ['en-US'];
+  }
+
   const rsp = await fetch(
-    `${apiUrl}?model=${language}&profanity_filter=false`,
+    `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`,
     {
-      referrer: '',
+      mode: 'cors',
+      method: 'POST',
+      body: JSON.stringify(data)
+    }
+  );
+
+  if (rsp.status !== 200) {
+    throw new Error(`API response: ${rsp.status}, ${await rsp.text()}`);
+  }
+
+  const results = (await rsp.json()).results;
+  if (results) {
+    return results[0].alternatives[0].transcript.trim();
+  }
+}
+
+async function getIbmSpeechApiResult(apiUrl, apiKey, audioContent, model) {
+  const rsp = await fetch(
+    `${apiUrl}/v1/recognize?model=${model}&profanity_filter=false`,
+    {
       mode: 'cors',
       method: 'POST',
       headers: {
-        Authorization: 'Basic ' + window.btoa('apiKey:' + apiKey),
+        Authorization: 'Basic ' + window.btoa('apikey:' + apiKey),
         'X-Watson-Learning-Opt-Out': 'true'
       },
       body: new Blob([audioContent], {type: 'audio/wav'})
@@ -327,15 +389,14 @@ async function getIbmSpeechApiResult(apiUrl, apiKey, audioContent, language) {
 }
 
 async function getMicrosoftSpeechApiResult(
-  apiUrl,
+  apiLocation,
   apiKey,
   audioContent,
   language
 ) {
   const rsp = await fetch(
-    `${apiUrl}?language=${language}&format=detailed&profanity=raw`,
+    `https://${apiLocation}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=${language}&format=detailed&profanity=raw`,
     {
-      referrer: '',
       mode: 'cors',
       method: 'POST',
       headers: {
@@ -359,18 +420,19 @@ async function getMicrosoftSpeechApiResult(
 async function transcribeAudio(audioUrl, lang) {
   let solution;
 
-  const audioRsp = await fetch(audioUrl, {referrer: ''});
+  const audioRsp = await fetch(audioUrl);
   const audioContent = await prepareAudio(await audioRsp.arrayBuffer());
 
-  const {speechService, tryEnglishSpeechModel} = await storage.get(
-    ['speechService', 'tryEnglishSpeechModel'],
-    'sync'
-  );
+  const {speechService, tryEnglishSpeechModel} = await storage.get([
+    'speechService',
+    'tryEnglishSpeechModel'
+  ]);
 
   if (['witSpeechApiDemo', 'witSpeechApi'].includes(speechService)) {
     const language = captchaWitSpeechApiLangCodes[lang] || 'english';
 
     const apiKey = await getWitSpeechApiKey(speechService, language);
+
     if (!apiKey) {
       showNotification({messageId: 'error_missingApiKey'});
       return;
@@ -388,10 +450,12 @@ async function transcribeAudio(audioUrl, lang) {
 
     if (!solution && language !== 'english' && tryEnglishSpeechModel) {
       const apiKey = await getWitSpeechApiKey(speechService, 'english');
+
       if (!apiKey) {
         showNotification({messageId: 'error_missingApiKey'});
         return;
       }
+
       const result = await getWitSpeechApiResult(apiKey, audioContent);
       if (result.errorId) {
         showNotification({
@@ -404,96 +468,64 @@ async function transcribeAudio(audioUrl, lang) {
     }
   } else if (speechService === 'googleSpeechApi') {
     const {googleSpeechApiKey: apiKey} = await storage.get(
-      'googleSpeechApiKey',
-      'sync'
+      'googleSpeechApiKey'
     );
+
     if (!apiKey) {
       showNotification({messageId: 'error_missingApiKey'});
       return;
     }
-    const apiUrl = `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`;
 
     const language = captchaGoogleSpeechApiLangCodes[lang] || 'en-US';
 
-    const data = {
-      audio: {
-        content: arrayBufferToBase64(audioContent)
-      },
-      config: {
-        encoding: 'LINEAR16',
-        languageCode: language,
-        model: 'video',
-        sampleRateHertz: 16000
-      }
-    };
-    if (!['en-US', 'en-GB'].includes(language) && tryEnglishSpeechModel) {
-      data.config.model = 'default';
-      data.config.alternativeLanguageCodes = ['en-US'];
-    }
-
-    const rsp = await fetch(apiUrl, {
-      referrer: '',
-      mode: 'cors',
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-
-    if (rsp.status !== 200) {
-      throw new Error(`API response: ${rsp.status}, ${await rsp.text()}`);
-    }
-
-    const results = (await rsp.json()).results;
-    if (results) {
-      solution = results[0].alternatives[0].transcript.trim();
-    }
+    solution = await getGoogleSpeechApiResult(
+      apiKey,
+      audioContent,
+      language,
+      tryEnglishSpeechModel
+    );
   } else if (speechService === 'ibmSpeechApi') {
-    const {
-      ibmSpeechApiLoc: apiLoc,
-      ibmSpeechApiKey: apiKey
-    } = await storage.get(['ibmSpeechApiLoc', 'ibmSpeechApiKey'], 'sync');
+    const {ibmSpeechApiUrl: apiUrl, ibmSpeechApiKey: apiKey} =
+      await storage.get(['ibmSpeechApiUrl', 'ibmSpeechApiKey']);
+
+    if (!apiUrl) {
+      showNotification({messageId: 'error_missingApiUrl'});
+      return;
+    }
     if (!apiKey) {
       showNotification({messageId: 'error_missingApiKey'});
       return;
     }
-    const apiUrl = ibmSpeechApiUrls[apiLoc];
-    const language =
-      captchaIbmSpeechApiLangCodes[lang] || 'en-US_BroadbandModel';
 
-    solution = await getIbmSpeechApiResult(
-      apiUrl,
-      apiKey,
-      audioContent,
-      language
-    );
+    const model = captchaIbmSpeechApiLangCodes[lang] || 'en-US_Multimedia';
+
+    solution = await getIbmSpeechApiResult(apiUrl, apiKey, audioContent, model);
+
     if (
       !solution &&
-      !['en-US_BroadbandModel', 'en-GB_BroadbandModel'].includes(language) &&
+      !['en-US_Multimedia', 'en-GB_Multimedia'].includes(model) &&
       tryEnglishSpeechModel
     ) {
       solution = await getIbmSpeechApiResult(
         apiUrl,
         apiKey,
         audioContent,
-        'en-US_BroadbandModel'
+        'en-US_Multimedia'
       );
     }
   } else if (speechService === 'microsoftSpeechApi') {
-    const {
-      microsoftSpeechApiLoc: apiLoc,
-      microsoftSpeechApiKey: apiKey
-    } = await storage.get(
-      ['microsoftSpeechApiLoc', 'microsoftSpeechApiKey'],
-      'sync'
-    );
+    const {microsoftSpeechApiLoc: apiLocaction, microsoftSpeechApiKey: apiKey} =
+      await storage.get(['microsoftSpeechApiLoc', 'microsoftSpeechApiKey']);
+
     if (!apiKey) {
       showNotification({messageId: 'error_missingApiKey'});
       return;
     }
-    const apiUrl = microsoftSpeechApiUrls[apiLoc];
+
     const language = captchaMicrosoftSpeechApiLangCodes[lang] || 'en-US';
 
     solution = await getMicrosoftSpeechApiResult(
-      apiUrl,
+      apiLocaction,
       apiKey,
       audioContent,
       language
@@ -504,7 +536,7 @@ async function transcribeAudio(audioUrl, lang) {
       tryEnglishSpeechModel
     ) {
       solution = await getMicrosoftSpeechApiResult(
-        apiUrl,
+        apiLocaction,
         apiKey,
         audioContent,
         'en-US'
@@ -515,7 +547,7 @@ async function transcribeAudio(audioUrl, lang) {
   if (solution) return solution
 }
 
-async function onMessage(request, sender) {
+async function processMessage(request, sender) {
   if (request.id === 'notification') {
     showNotification({
       message: request.message,
@@ -595,22 +627,26 @@ async function onMessage(request, sender) {
   } else if (request.id === 'openOptions') {
     browser.runtime.openOptionsPage();
   } else if (request.id === 'getPlatform') {
-    return getPlatform();
+    return getPlatform({fallback: false});
   } else if (request.id === 'getBrowser') {
     return getBrowser();
+  } else if (request.id === 'optionChange') {
+    await onOptionChange();
   }
 }
 
-async function onStorageChange(changes, area) {
+function onMessage(request, sender, sendResponse) {
+  const response = processMessage(request, sender);
+
+  return processMessageResponse(response, sendResponse);
+}
+
+async function onOptionChange() {
   await setChallengeLocale();
 }
 
-function addStorageListener() {
-  browser.storage.onChanged.addListener(onStorageChange);
-}
-
-function addMessageListener() {
-  browser.runtime.onMessage.addListener(onMessage);
+async function onActionButtonClick(tab) {
+  await browser.runtime.openOptionsPage();
 }
 
 async function onInstall(details) {
@@ -634,14 +670,9 @@ async function onInstall(details) {
           await browser.tabs.insertCSS(tabId, {
             frameId,
             runAt: 'document_idle',
-            file: '/src/solve/reset-button.css'
+            file: '/src/solve/style.css'
           });
 
-          await browser.tabs.executeScript(tabId, {
-            frameId,
-            runAt: 'document_idle',
-            file: '/src/manifest.js'
-          });
           await browser.tabs.executeScript(tabId, {
             frameId,
             runAt: 'document_idle',
@@ -662,13 +693,33 @@ async function onInstall(details) {
   }
 }
 
-async function onLoad() {
-  await initStorage('sync');
-  await setChallengeLocale();
-  addStorageListener();
-  addMessageListener();
+function addBrowserActionListener() {
+  browser.browserAction.onClicked.addListener(onActionButtonClick);
 }
 
-browser.runtime.onInstalled.addListener(onInstall);
+function addMessageListener() {
+  browser.runtime.onMessage.addListener(onMessage);
+}
 
-document.addEventListener('DOMContentLoaded', onLoad);
+function addInstallListener() {
+  browser.runtime.onInstalled.addListener(onInstall);
+}
+
+async function setup() {
+  if (!(await isStorageReady())) {
+    await migrateLegacyStorage();
+    await initStorage();
+  }
+
+  await setChallengeLocale();
+}
+
+function init() {
+  addBrowserActionListener();
+  addMessageListener();
+  addInstallListener();
+
+  setup();
+}
+
+init();

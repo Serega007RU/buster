@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.0.1](https://github.com/dessant/buster/compare/v2.0.0...v2.0.1) (2022-12-16)
+
+
+### Bug Fixes
+
+* set color scheme ([57c941a](https://github.com/dessant/buster/commit/57c941ae685b367504da03f94bf5d74ddd645ddf))
+
+## [2.0.0](https://github.com/dessant/buster/compare/v1.3.2...v2.0.0) (2022-12-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* the options for speech recognition services have changed,
+the configuration of certain services may be needed
+* browser versions older than Chrome 92, Edge 92,
+Firefox 91, and Opera 78 are no longer supported
+
+### Features
+
+* migrate to Vuetify ([c921f65](https://github.com/dessant/buster/commit/c921f6509e515158491b4878ab5a4bb075b1a048))
+
+
+### Bug Fixes
+
+* update speech recognition services ([cd84690](https://github.com/dessant/buster/commit/cd84690f362773d4123e838299e07825a67812b4))
+
 ### [1.3.2](https://github.com/dessant/buster/compare/v1.3.1...v1.3.2) (2022-09-01)
 
 
